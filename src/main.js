@@ -105,19 +105,10 @@ const graph = new ForceGraph($('graph'))
     }
     ctx.globalAlpha = 1;
   })
-  .nodePointerAreaPaint((n, color, ctx) => {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, radius(n) + 2, 0, 2 * Math.PI);
-    ctx.fill();
-  })
-  .onNodeHover((n) => {
-    state.hovered = n?.id ?? null;
-    $('graph').style.cursor = n ? 'pointer' : '';
-  })
-  .onNodeClick((n) => navigate(n.id))
-  .onBackgroundClick(() => { if (state.selected) navigate(null); })
-  .onNodeDragEnd((n) => { n.fx = undefined; n.fy = undefined; })
+  // force-graph finds the node under the pointer by reading pixel colours back from a hidden
+  // canvas. Browsers with fingerprinting protection (Brave, Safari, Firefox RFP) add noise to
+  // those reads, which silently breaks hover and click. Hit-testing is done geometrically below.
+  .enablePointerInteraction(false)
   .warmupTicks(120) // lay out before the first frame so the camera has real positions to aim at
   .cooldownTicks(150)
   .d3VelocityDecay(0.3);
@@ -136,6 +127,57 @@ graph.onEngineStop(() => {
 const resize = () => graph.width(innerWidth).height(innerHeight);
 addEventListener('resize', resize);
 resize();
+
+// ---- pointer: hover + click ----------------------------------------------------------
+const CLICK_TOLERANCE_PX = 5;
+
+function nodeAt(clientX, clientY) {
+  const p = graph.screen2GraphCoords(clientX, clientY);
+  const slop = 4 / graph.zoom(); // a few screen pixels of forgiveness around small nodes
+  let best = null;
+  let bestDist = Infinity;
+  for (const n of nodes) {
+    if (isHidden(n)) continue;
+    const d = Math.hypot(n.x - p.x, n.y - p.y);
+    if (d <= radius(n) + slop && d < bestDist) { best = n; bestDist = d; }
+  }
+  return best;
+}
+
+function setHovered(id) {
+  if (id === state.hovered) return;
+  state.hovered = id;
+  $('graph').style.cursor = id ? 'pointer' : '';
+  refresh();
+}
+
+const canvasEl = $('graph');
+const pointers = new Map(); // pointerId -> down position; >1 means pinch, never a click
+let multiTouch = false;
+
+canvasEl.addEventListener('pointermove', (e) => {
+  if (pointers.size || e.pointerType !== 'mouse') return; // panning, or touch (no hover)
+  setHovered(nodeAt(e.clientX, e.clientY)?.id ?? null);
+});
+canvasEl.addEventListener('pointerleave', () => setHovered(null));
+canvasEl.addEventListener('pointerdown', (e) => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size > 1) multiTouch = true;
+}, true);
+const endPointer = (e) => {
+  const start = pointers.get(e.pointerId);
+  pointers.delete(e.pointerId);
+  const wasMulti = multiTouch;
+  if (!pointers.size) multiTouch = false;
+  if (e.type !== 'pointerup' || !start || wasMulti || e.button !== 0) return;
+  if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE_PX) return; // a pan
+  const n = nodeAt(e.clientX, e.clientY);
+  if (n) navigate(n.id);
+  else if (state.selected) navigate(null);
+};
+// Capture phase: d3-zoom handles these on the canvas and may stop them reaching us otherwise.
+canvasEl.addEventListener('pointerup', endPointer, true);
+canvasEl.addEventListener('pointercancel', endPointer, true);
 
 // ---- note panel ----------------------------------------------------------------------
 const panel = $('panel');
