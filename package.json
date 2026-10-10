@@ -1,0 +1,21 @@
+{
+  "name": "thielverse-app",
+  "version": "0.1.0",
+  "description": "Interactive, shareable graph view of the Thielverse Obsidian vault",
+  "scripts": {
+    "data": "node scripts/build-data.mjs",
+    "dev": "npm run data && vite",
+    "build": "npm run data && vite build",
+    "preview": "vite preview"
+  },
+  "type": "module",
+  "dependencies": {
+    "force-graph": "^1.52.0"
+  },
+  "devDependencies": {
+    "gray-matter": "^4.0.3",
+    "markdown-it": "^15.0.2",
+    "vite": "^7.3.7"
+  },
+  "private": true
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vercel/
+.DS_Store
+# Generated from the vault at build time
+public/vault.json
+
+# Obsidian app state and plugins (the REST API plugin stores an API key + certs).
+# Only graph.json is kept: the build reads its colour groups.
+thielverse/.obsidian/*
+!thielverse/.obsidian/graph.json

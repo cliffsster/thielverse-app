@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>The Thielverse</title>
+    <meta name="description" content="An interactive map of the Thiel network: people, companies, funds and the state." />
+    <meta property="og:title" content="The Thielverse" />
+    <meta property="og:description" content="An interactive map of the Thiel network: people, companies, funds and the state." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='9' cy='22' r='5' fill='%23c152e0'/><circle cx='23' cy='9' r='5' fill='%23006eff'/><circle cx='24' cy='24' r='3' fill='%2352e052'/><path d='M9 22L23 9M23 9l1 15M9 22l15 2' stroke='%23888' stroke-width='1.5'/></svg>" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="graph" aria-label="Note graph"></div>
+
+    <header class="topbar">
+      <button class="brand" id="home" title="Back to the overview">The Thielverse</button>
+      <div class="search">
+        <input id="search" type="search" placeholder="Search notes…" autocomplete="off" spellcheck="false" aria-label="Search notes" />
+        <ul id="results" role="listbox" hidden></ul>
+      </div>
+    </header>
+
+    <aside class="legend" id="legend">
+      <button class="legend-toggle" id="legend-toggle" aria-expanded="true">Groups</button>
+      <div class="legend-body">
+        <ul id="groups"></ul>
+        <label class="check"><input type="checkbox" id="hide-periphery" /> Hide <code>#periphery</code></label>
+        <label class="check"><input type="checkbox" id="show-labels" checked /> Labels</label>
+        <button class="fit" id="fit">Fit graph</button>
+      </div>
+    </aside>
+
+    <article class="panel" id="panel" hidden>
+      <div class="panel-head">
+        <div class="panel-nav">
+          <button id="back" title="Back" aria-label="Back">←</button>
+          <button id="close" title="Close" aria-label="Close">✕</button>
+        </div>
+        <h1 id="note-title"></h1>
+        <p class="role" id="note-role"></p>
+        <div class="chips" id="note-tags"></div>
+      </div>
+      <div class="panel-body">
+        <div class="note" id="note-body"></div>
+        <section class="backlinks" id="note-backlinks"></section>
+      </div>
+    </article>
+
+    <div class="loading" id="loading">Loading graph…</div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
