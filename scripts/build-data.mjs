@@ -1,5 +1,5 @@
 // Reads the Obsidian vault and writes public/vault.json: every note pre-rendered to HTML,
-// plus the link graph and the colour groups from the vault's own graph settings.
+// plus the link graph and the default colour groups.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -137,21 +137,25 @@ for (const n of notes) {
 const backlinks = Object.fromEntries(notes.map((n) => [n.id, []]));
 for (const n of notes) for (const t of n.out) backlinks[t].push(n.id);
 
-// ---- colour groups from .obsidian/graph.json (first matching query wins, like Obsidian) ---
-let groups = [];
-try {
-  const g = JSON.parse(fs.readFileSync(path.join(VAULT, '.obsidian', 'graph.json'), 'utf8'));
-  groups = (g.colorGroups ?? []).flatMap(({ query, color }) => {
-    const m = query.trim().match(/^tag:#?(\S+)$/);
-    if (!m) return [];
-    return [{ tag: m[1], color: '#' + color.rgb.toString(16).padStart(6, '0') }];
-  });
-} catch { /* no graph settings: everything uses the default colour */ }
-
-for (const n of notes) {
-  n.backlinks = backlinks[n.id].sort();
-  n.group = groups.find((g) => n.tags.includes(g.tag))?.tag ?? null;
+// ---- default colour groups ----------------------------------------------------------------
+// color-groups.json (repo root) is the site's default; viewers can edit their own copy in the
+// page. Without it, fall back to the vault's Obsidian graph settings.
+function loadGroups() {
+  const site = path.join(ROOT, 'color-groups.json');
+  if (fs.existsSync(site)) return JSON.parse(fs.readFileSync(site, 'utf8'));
+  try {
+    const g = JSON.parse(fs.readFileSync(path.join(VAULT, '.obsidian', 'graph.json'), 'utf8'));
+    return (g.colorGroups ?? []).map(({ query, color }) => ({
+      query: query.trim(),
+      color: '#' + color.rgb.toString(16).padStart(6, '0'),
+    }));
+  } catch {
+    return [];
+  }
 }
+const groups = loadGroups();
+
+for (const n of notes) n.backlinks = backlinks[n.id].sort();
 
 const allTags = {};
 for (const n of notes) for (const t of n.tags) allTags[t] = (allTags[t] ?? 0) + 1;

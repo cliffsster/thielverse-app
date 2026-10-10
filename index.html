@@ -22,12 +22,33 @@
     </header>
 
     <aside class="legend" id="legend">
-      <button class="legend-toggle" id="legend-toggle" aria-expanded="true">Groups</button>
+      <div class="legend-head">
+        <button class="legend-toggle" id="legend-toggle" aria-expanded="true">Groups</button>
+        <button class="legend-edit" id="legend-edit" title="Add or change colour groups">Edit</button>
+      </div>
       <div class="legend-body">
         <ul id="groups"></ul>
-        <label class="check"><input type="checkbox" id="hide-periphery" /> Hide <code>#periphery</code></label>
-        <label class="check"><input type="checkbox" id="show-labels" checked /> Labels</label>
-        <button class="fit" id="fit">Fit graph</button>
+        <div class="edit-only group-actions" hidden>
+          <button id="group-add">+ New group</button>
+          <button id="group-reset" title="Restore the default groups">Reset</button>
+        </div>
+        <details class="edit-only group-help" hidden>
+          <summary>Query syntax</summary>
+          <dl>
+            <dt><code>tag:#person</code></dt><dd>has the tag</dd>
+            <dt><code>path:People</code></dt><dd>folder path contains</dd>
+            <dt><code>file:Thiel</code></dt><dd>note name contains</dd>
+            <dt><code>[role:ceo]</code></dt><dd>property contains (<code>role</code>, <code>link</code>)</dd>
+            <dt><code>palantir</code></dt><dd>name or text contains; <code>"quoted phrase"</code></dd>
+            <dt><code>-tag:#x</code> · <code>a OR b</code></dt><dd>exclude · either; spaces mean all</dd>
+          </dl>
+          <p>The first matching group sets a note's colour. Changes are saved in this browser only.</p>
+        </details>
+        <div class="view-only">
+          <label class="check"><input type="checkbox" id="hide-periphery" /> Hide <code>#periphery</code></label>
+          <label class="check"><input type="checkbox" id="show-labels" checked /> Labels</label>
+          <button class="fit" id="fit">Fit graph</button>
+        </div>
       </div>
     </aside>
 

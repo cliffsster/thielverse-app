@@ -1,0 +1,9 @@
+[
+  { "query": "tag:#epstein", "color": "#ff0000" },
+  { "query": "tag:#paypal-mafia", "color": "#ff9f1a" },
+  { "query": "tag:#company", "color": "#006eff" },
+  { "query": "tag:#person", "color": "#c152e0" },
+  { "query": "tag:#fund", "color": "#52e052" },
+  { "query": "tag:#government", "color": "#52e0b1" },
+  { "query": "tag:#ngo", "color": "#52b1e0" }
+]

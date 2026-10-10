@@ -1,4 +1,5 @@
 import ForceGraph from 'force-graph';
+import { compile, soleTag, loadSaved, save, clearSaved } from './groups.js';
 
 const DEFAULT_COLOR = '#8a8f98';
 const HOME_COLOR = '#f5c542';
@@ -6,7 +7,6 @@ const $ = (id) => document.getElementById(id);
 
 const vault = await fetch('/vault.json').then((r) => r.json());
 const byId = new Map(vault.notes.map((n) => [n.id, n]));
-const groupColor = Object.fromEntries(vault.groups.map((g) => [g.tag, g.color]));
 
 // ---- graph data ----------------------------------------------------------------------
 const neighbors = new Map(vault.notes.map((n) => [n.id, new Set()]));
@@ -20,7 +20,27 @@ const nodeById = new Map(nodes.map((n) => [n.id, n]));
 // force-graph swaps link endpoints from ids to node objects once the simulation starts.
 const end = (x) => (typeof x === 'object' ? x : nodeById.get(x));
 const radius = (node) => 2.2 + Math.sqrt(node.degree) * 1.15;
-const colorOf = (n) => (n.id === vault.home ? HOME_COLOR : groupColor[n.note.group] ?? DEFAULT_COLOR);
+
+// ---- colour groups (editable by the viewer, saved in their browser) -------------------
+let groupSeq = 0;
+const makeGroup = ({ query, color }) => ({ id: 'g' + groupSeq++, query, color, match: compile(query) });
+let groups = (loadSaved() ?? vault.groups).map(makeGroup);
+const groupCounts = new Map();
+
+/** First matching group wins, as in Obsidian. */
+function assignGroups() {
+  groupCounts.clear();
+  for (const n of vault.notes) {
+    n.group = groups.find((g) => g.match(n))?.id ?? null;
+    const k = n.group ?? '__none';
+    groupCounts.set(k, (groupCounts.get(k) ?? 0) + 1);
+  }
+}
+assignGroups();
+
+const groupById = (id) => groups.find((g) => g.id === id);
+const colorOf = (n) => (n.id === vault.home ? HOME_COLOR : groupById(n.note.group)?.color ?? DEFAULT_COLOR);
+const tagColor = (tag) => groups.find((g) => soleTag(g.query) === tag.toLowerCase())?.color;
 
 // ---- state ---------------------------------------------------------------------------
 const state = {
@@ -203,7 +223,8 @@ function showNote(id) {
       const s = document.createElement('span');
       s.className = 'chip';
       s.textContent = '#' + t;
-      if (groupColor[t]) s.style.setProperty('--dot', groupColor[t]);
+      const c = tagColor(t);
+      if (c) s.style.setProperty('--dot', c);
       return s;
     }),
   );
@@ -344,37 +365,120 @@ input.addEventListener('keydown', (e) => {
 input.addEventListener('blur', () => setTimeout(() => { results.hidden = true; }, 100));
 input.addEventListener('focus', () => { results.hidden = !matches.length; });
 addEventListener('keydown', (e) => {
-  if (e.target === input) return;
+  if (e.target.closest('input, textarea, select')) return;
   if (e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key === 'k')) { e.preventDefault(); input.focus(); }
   else if (e.key === 'Escape' && state.selected) navigate(null);
 });
 
-// ---- legend / filters ----------------------------------------------------------------
-const counts = {};
-for (const n of vault.notes) counts[n.group ?? '__none'] = (counts[n.group ?? '__none'] ?? 0) + 1;
-const legendItems = [...vault.groups.map((g) => ({ key: g.tag, label: '#' + g.tag, color: g.color }))];
-if (counts.__none) legendItems.push({ key: '__none', label: 'other', color: DEFAULT_COLOR });
+// ---- legend: show/hide groups, or edit them like Obsidian's Groups panel ------------------
+const legend = $('legend');
+const groupList = $('groups');
+const PALETTE = ['#ff9f1a', '#e05297', '#4fc3f7', '#9ccc65', '#ffd54f', '#ba68c8', '#4db6ac', '#ff7043'];
+let editing = false;
 
-$('groups').replaceChildren(
-  ...legendItems.map(({ key, label, color }) => {
-    const li = document.createElement('li');
-    const b = document.createElement('button');
-    b.style.setProperty('--dot', color);
-    b.innerHTML = '<span class="label"></span><span class="count"></span>';
-    b.querySelector('.label').textContent = label;
-    b.querySelector('.count').textContent = counts[key] ?? 0;
-    b.setAttribute('aria-pressed', 'true');
-    b.title = 'Show/hide ' + label;
-    b.onclick = () => {
-      const off = state.hiddenGroups.has(key);
-      off ? state.hiddenGroups.delete(key) : state.hiddenGroups.add(key);
-      b.setAttribute('aria-pressed', String(off));
-      refresh();
-    };
-    li.append(b);
-    return li;
-  }),
-);
+function groupChanged() {
+  assignGroups();
+  save(groups);
+  for (const el of groupList.querySelectorAll('[data-count]')) el.textContent = groupCounts.get(el.dataset.count) ?? 0;
+  refresh();
+}
+
+function viewRow({ key, label, color }) {
+  const li = document.createElement('li');
+  const b = document.createElement('button');
+  b.style.setProperty('--dot', color);
+  b.innerHTML = '<span class="label"></span><span class="count"></span>';
+  b.querySelector('.label').textContent = label || '(empty query)';
+  b.querySelector('.count').dataset.count = key;
+  b.querySelector('.count').textContent = groupCounts.get(key) ?? 0;
+  const on = !state.hiddenGroups.has(key);
+  b.setAttribute('aria-pressed', String(on));
+  b.title = 'Show/hide ' + label;
+  b.onclick = () => {
+    const off = state.hiddenGroups.has(key);
+    off ? state.hiddenGroups.delete(key) : state.hiddenGroups.add(key);
+    b.setAttribute('aria-pressed', String(off));
+    refresh();
+  };
+  li.append(b);
+  return li;
+}
+
+function editRow(g, i) {
+  const li = document.createElement('li');
+  li.className = 'edit-row';
+  li.innerHTML = `
+    <input type="color" aria-label="Group colour" />
+    <input type="text" class="query" spellcheck="false" autocomplete="off" placeholder="tag:#paypal-mafia" aria-label="Group query" />
+    <span class="count"></span>
+    <span class="row-tools">
+      <button data-act="up" title="Move up (earlier groups win)" aria-label="Move up">↑</button>
+      <button data-act="down" title="Move down" aria-label="Move down">↓</button>
+      <button data-act="del" title="Delete group" aria-label="Delete group">✕</button>
+    </span>`;
+  const [color, query] = li.querySelectorAll('input');
+  color.value = g.color;
+  query.value = g.query;
+  li.querySelector('.count').dataset.count = g.id;
+  li.querySelector('.count').textContent = groupCounts.get(g.id) ?? 0;
+  color.oninput = () => { g.color = color.value; groupChanged(); };
+  query.oninput = () => { g.query = query.value; g.match = compile(g.query); groupChanged(); };
+  li.querySelector('[data-act="up"]').disabled = i === 0;
+  li.querySelector('[data-act="down"]').disabled = i === groups.length - 1;
+  li.onclick = (e) => {
+    const act = e.target.closest('button')?.dataset.act;
+    if (!act) return;
+    if (act === 'del') {
+      groups.splice(i, 1);
+      state.hiddenGroups.delete(g.id);
+    } else {
+      const j = act === 'up' ? i - 1 : i + 1;
+      [groups[i], groups[j]] = [groups[j], groups[i]];
+    }
+    groupChanged();
+    renderLegend();
+  };
+  return li;
+}
+
+function renderLegend() {
+  legend.classList.toggle('editing', editing);
+  $('legend-edit').textContent = editing ? 'Done' : 'Edit';
+  $('legend-edit').setAttribute('aria-pressed', String(editing));
+  for (const el of legend.querySelectorAll('.edit-only')) el.hidden = !editing;
+  for (const el of legend.querySelectorAll('.view-only')) el.hidden = editing;
+  if (editing) {
+    groupList.replaceChildren(...groups.map(editRow));
+  } else {
+    const label = (q) => (soleTag(q) ? '#' + soleTag(q) : q.trim());
+    const rows = groups.map((g) => viewRow({ key: g.id, label: label(g.query), color: g.color }));
+    if (groupCounts.get('__none')) rows.push(viewRow({ key: '__none', label: 'other', color: DEFAULT_COLOR }));
+    groupList.replaceChildren(...rows);
+  }
+}
+
+$('legend-edit').onclick = () => {
+  editing = !editing;
+  legend.classList.remove('collapsed');
+  renderLegend();
+};
+$('group-add').onclick = () => {
+  const used = new Set(groups.map((g) => g.color.toLowerCase()));
+  const color = PALETTE.find((c) => !used.has(c)) ?? PALETTE[groups.length % PALETTE.length];
+  groups.push(makeGroup({ query: '', color }));
+  groupChanged();
+  renderLegend();
+  groupList.querySelector('li:last-child .query').focus();
+};
+$('group-reset').onclick = () => {
+  groups = vault.groups.map(makeGroup);
+  state.hiddenGroups.clear();
+  clearSaved();
+  assignGroups();
+  refresh();
+  renderLegend();
+};
+renderLegend();
 
 function refresh() {
   // Re-assigning the accessors makes force-graph re-evaluate visibility.
@@ -382,10 +486,9 @@ function refresh() {
 }
 
 $('hide-periphery').onchange = (e) => { state.hidePeriphery = e.target.checked; refresh(); };
-$('show-labels').onchange = (e) => { state.labels = e.target.checked; };
+$('show-labels').onchange = (e) => { state.labels = e.target.checked; refresh(); };
 $('fit').onclick = () => graph.zoomToFit(600, 60, (n) => !isHidden(n));
 
-const legend = $('legend');
 $('legend-toggle').onclick = () => {
   const collapsed = legend.classList.toggle('collapsed');
   $('legend-toggle').setAttribute('aria-expanded', String(!collapsed));
